@@ -2,10 +2,24 @@ const { v4: uuidv4 } = require("uuid");
 const jobs = require("../models/jobStore");
 const { extractStages } = require("./parserService");
 
-exports.createJob = (repo, branch) => {
+// Guess language from repo name or commit messages
+function detectLanguage(repoName = "", commits = []) {
+  const text = [
+    repoName,
+    ...commits.map((c) => c.message || ""),
+  ]
+    .join(" ")
+    .toLowerCase();
+
+  if (text.includes("python") || text.includes(".py")) return "python";
+  if (text.includes("java")   || text.includes(".java")) return "java";
+  if (text.includes("node")   || text.includes(".js"))   return "node";
+  return "generic";
+}
+
+exports.createJob = (repo, branch, language = "generic") => {
   const id = uuidv4();
 
-  // For now: fake Jenkinsfile content
   const fakeJenkinsfile = `
     stage('Build')
     stage('Test')
@@ -18,16 +32,19 @@ exports.createJob = (repo, branch) => {
     id,
     repo,
     branch,
+    language,
     status: "QUEUED",
     stages,
-    createdAt: new Date()
+    workerId: null,
+    createdAt: new Date(),
+    finishedAt: null,
   };
 
   jobs.push(job);
-
+  console.log(`Job created: ${id} | repo: ${repo} | lang: ${language}`);
   return job;
 };
 
 exports.getAllJobs = () => jobs;
-
-exports.getJobById = (id) => jobs.find(j => j.id === id);
+exports.getJobById = (id) => jobs.find((j) => j.id === id);
+exports.detectLanguage = detectLanguage;
