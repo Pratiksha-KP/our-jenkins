@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mini Jenkins Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #111118;
+    --surface2: #1a1a24;
+    --border: #2a2a3a;
+    --accent: #00e5ff;
+    --accent2: #7c3aed;
+    --success: #00e676;
+    --fail: #ff1744;
+    --warn: #ffd740;
+    --running: #00b0ff;
+    --text: #e8e8f0;
+    --muted: #666680;
+    --font-mono: 'JetBrains Mono', monospace;
+    --font-display: 'Syne', sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-mono);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Animated grid background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,229,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,229,255,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container {
+    position: relative;
+    z-index: 1;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 24px;
+  }
+
+  /* Header */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 32px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .logo-icon {
+    width: 40px;
+    height: 40px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    box-shadow: 0 0 20px rgba(0,229,255,0.3);
+  }
+
+  .logo h1 {
+    font-family: var(--font-display);
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+  }
+
+  .logo span {
+    color: var(--accent);
+  }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--success);
+    box-shadow: 0 0 8px var(--success);
+    animation: pulse 2s infinite;
+  }
+
+  .status-dot.offline { background: var(--fail); box-shadow: 0 0 8px var(--fail); animation: none; }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  .server-status {
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  /* Stats bar */
+  .stats-bar {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 12px;
+    margin-bottom: 28px;
+  }
+
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.2s;
+  }
+
+  .stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+  }
+
+  .stat-card.total::before { background: var(--accent); }
+  .stat-card.queued::before { background: var(--warn); }
+  .stat-card.running::before { background: var(--running); }
+  .stat-card.success::before { background: var(--success); }
+  .stat-card.failed::before { background: var(--fail); }
+
+  .stat-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+
+  .stat-value {
+    font-family: var(--font-display);
+    font-size: 28px;
+    font-weight: 800;
+    line-height: 1;
+  }
+
+  .stat-card.total .stat-value { color: var(--accent); }
+  .stat-card.queued .stat-value { color: var(--warn); }
+  .stat-card.running .stat-value { color: var(--running); }
+  .stat-card.success .stat-value { color: var(--success); }
+  .stat-card.failed .stat-value { color: var(--fail); }
+
+  /* Main grid */
+  .main-grid {
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    gap: 20px;
+  }
+
+  /* Panel */
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .panel-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .panel-title {
+    font-family: var(--font-display);
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--muted);
+  }
+
+  .refresh-btn {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .refresh-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* Job list */
+  .job-list { padding: 12px; }
+
+  .job-item {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+    margin-bottom: 8px;
+    display: grid;
+    grid-template-columns: auto 1fr auto auto;
+    align-items: center;
+    gap: 12px;
+    transition: border-color 0.2s, transform 0.15s;
+    animation: slideIn 0.3s ease;
+    cursor: pointer;
+  }
+
+  .job-item:hover { border-color: var(--accent); transform: translateX(2px); }
+  .job-item:last-child { margin-bottom: 0; }
+
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateY(-8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .job-status-icon {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .status-QUEUED { background: var(--warn); box-shadow: 0 0 6px var(--warn); }
+  .status-RUNNING { background: var(--running); box-shadow: 0 0 6px var(--running); animation: pulse 1s infinite; }
+  .status-SUCCESS { background: var(--success); box-shadow: 0 0 6px var(--success); }
+  .status-FAILED { background: var(--fail); box-shadow: 0 0 6px var(--fail); }
+
+  .job-info { min-width: 0; }
+
+  .job-repo {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .job-meta {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+
+  .job-meta span { margin-right: 10px; }
+
+  .lang-badge {
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    flex-shrink: 0;
+  }
+
+  .lang-python { background: rgba(0,230,118,0.15); color: var(--success); border: 1px solid rgba(0,230,118,0.3); }
+  .lang-node { background: rgba(255,215,64,0.15); color: var(--warn); border: 1px solid rgba(255,215,64,0.3); }
+  .lang-java { background: rgba(0,176,255,0.15); color: var(--running); border: 1px solid rgba(0,176,255,0.3); }
+  .lang-generic { background: rgba(102,102,128,0.15); color: var(--muted); border: 1px solid rgba(102,102,128,0.3); }
+
+  .job-status-text {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    flex-shrink: 0;
+    min-width: 60px;
+    text-align: right;
+  }
+
+  .text-QUEUED { color: var(--warn); }
+  .text-RUNNING { color: var(--running); }
+  .text-SUCCESS { color: var(--success); }
+  .text-FAILED { color: var(--fail); }
+
+  .empty-state {
+    text-align: center;
+    padding: 48px 20px;
+    color: var(--muted);
+    font-size: 13px;
+  }
+
+  .empty-state .icon { font-size: 32px; margin-bottom: 12px; }
+
+  /* Right sidebar */
+  .sidebar { display: flex; flex-direction: column; gap: 20px; }
+
+  /* Trigger form */
+  .trigger-form { padding: 16px; }
+
+  .form-group { margin-bottom: 14px; }
+
+  .form-label {
+    display: block;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+
+  .form-input, .form-select {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 9px 12px;
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .form-input:focus, .form-select:focus { border-color: var(--accent); }
+  .form-select option { background: var(--surface2); }
+
+  .trigger-btn {
+    width: 100%;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border: none;
+    border-radius: 6px;
+    padding: 11px;
+    color: #000;
+    font-family: var(--font-display);
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    letter-spacing: 0.5px;
+    transition: opacity 0.2s, transform 0.15s;
+    text-transform: uppercase;
+  }
+
+  .trigger-btn:hover { opacity: 0.9; transform: translateY(-1px); }
+  .trigger-btn:active { transform: translateY(0); }
+  .trigger-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+  /* Workers */
+  .workers-grid { padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+
+  .worker-item {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    transition: border-color 0.2s;
+  }
+
+  .worker-item.busy { border-color: rgba(0,176,255,0.4); background: rgba(0,176,255,0.05); }
+
+  .worker-left { display: flex; align-items: center; gap: 10px; }
+
+  .worker-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--success);
+    box-shadow: 0 0 6px var(--success);
+  }
+
+  .worker-dot.busy {
+    background: var(--running);
+    box-shadow: 0 0 6px var(--running);
+    animation: pulse 1s infinite;
+  }
+
+  .worker-name { font-size: 12px; font-weight: 600; }
+  .worker-type { font-size: 10px; color: var(--muted); margin-top: 1px; }
+
+  .worker-state {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .worker-state.free { color: var(--success); }
+  .worker-state.busy { color: var(--running); }
+
+  /* Log panel */
+  .log-area {
+    padding: 12px;
+    font-size: 11px;
+    color: var(--muted);
+    max-height: 180px;
+    overflow-y: auto;
+    line-height: 1.8;
+  }
+
+  .log-area::-webkit-scrollbar { width: 4px; }
+  .log-area::-webkit-scrollbar-track { background: transparent; }
+  .log-area::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .log-line { display: flex; gap: 8px; }
+  .log-time { color: var(--accent2); flex-shrink: 0; }
+  .log-msg.success { color: var(--success); }
+  .log-msg.fail { color: var(--fail); }
+  .log-msg.info { color: var(--accent); }
+  .log-msg.warn { color: var(--warn); }
+
+  /* Toast */
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 16px;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    z-index: 100;
+    transform: translateY(80px);
+    opacity: 0;
+    transition: all 0.3s ease;
+  }
+
+  .toast.show { transform: translateY(0); opacity: 1; }
+  .toast.success { border-color: var(--success); }
+  .toast.error { border-color: var(--fail); }
+
+  /* Auto-refresh indicator */
+  .auto-refresh {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  .spinning { animation: spin 1s linear infinite; display: inline-block; }
+  @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <div class="logo">
+      <div class="logo-icon">⚙</div>
+      <h1>Mini <span>Jenkins</span></h1>
+    </div>
+    <div class="header-right">
+      <div class="auto-refresh">
+        <span class="spinning" id="spinner">↻</span>
+        auto-refresh 3s
+      </div>
+      <div class="status-dot" id="serverDot"></div>
+      <span class="server-status" id="serverStatus">connecting...</span>
+    </div>
+  </header>
+
+  <div class="stats-bar">
+    <div class="stat-card total">
+      <div class="stat-label">Total Jobs</div>
+      <div class="stat-value" id="statTotal">0</div>
+    </div>
+    <div class="stat-card queued">
+      <div class="stat-label">Queued</div>
+      <div class="stat-value" id="statQueued">0</div>
+    </div>
+    <div class="stat-card running">
+      <div class="stat-label">Running</div>
+      <div class="stat-value" id="statRunning">0</div>
+    </div>
+    <div class="stat-card success">
+      <div class="stat-label">Success</div>
+      <div class="stat-value" id="statSuccess">0</div>
+    </div>
+    <div class="stat-card failed">
+      <div class="stat-label">Failed</div>
+      <div class="stat-value" id="statFailed">0</div>
+    </div>
+  </div>
+
+  <div class="main-grid">
+
+    <!-- Job list -->
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">Job Queue & History</span>
+        <button class="refresh-btn" onclick="fetchJobs()">↻ Refresh</button>
+      </div>
+      <div class="job-list" id="jobList">
+        <div class="empty-state">
+          <div class="icon">📭</div>
+          <div>No jobs yet. Trigger one →</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div class="sidebar">
+
+      <!-- Trigger -->
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">Trigger Job</span>
+        </div>
+        <div class="trigger-form">
+          <div class="form-group">
+            <label class="form-label">Repository</label>
+            <input class="form-input" id="inputRepo" placeholder="user/repo" value="myuser/myrepo">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Branch</label>
+            <input class="form-input" id="inputBranch" placeholder="main" value="main">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Language</label>
+            <select class="form-select" id="inputLang">
+              <option value="generic">Generic</option>
+              <option value="python">Python</option>
+              <option value="node">Node.js</option>
+              <option value="java">Java</option>
+            </select>
+          </div>
+          <button class="trigger-btn" id="triggerBtn" onclick="triggerJob()">▶ Trigger Job</button>
+        </div>
+      </div>
+
+      <!-- Workers -->
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">Workers</span>
+        </div>
+        <div class="workers-grid" id="workersList">
+          <!-- populated by JS -->
+        </div>
+      </div>
+
+      <!-- Activity log -->
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">Activity Log</span>
+        </div>
+        <div class="log-area" id="logArea">
+          <div class="log-line">
+            <span class="log-time">--:--:--</span>
+            <span class="log-msg">Dashboard loaded</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+  const API = 'http://localhost:3000';
+  let prevJobs = {};
+  let workers = [
+    { id: 'w1', type: 'node',    busy: false },
+    { id: 'w2', type: 'python',  busy: false },
+    { id: 'w3', type: 'java',    busy: false },
+    { id: 'w4', type: 'generic', busy: false },
+  ];
+
+  function now() {
+    return new Date().toLocaleTimeString('en-GB');
+  }
+
+  function log(msg, type = '') {
+    const area = document.getElementById('logArea');
+    const line = document.createElement('div');
+    line.className = 'log-line';
+    line.innerHTML = `<span class="log-time">${now()}</span><span class="log-msg ${type}">${msg}</span>`;
+    area.appendChild(line);
+    area.scrollTop = area.scrollHeight;
+    // keep max 50 lines
+    while (area.children.length > 50) area.removeChild(area.firstChild);
+  }
+
+  function showToast(msg, type = '') {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = `toast ${type} show`;
+    setTimeout(() => t.classList.remove('show'), 3000);
+  }
+
+  function langClass(lang) {
+    return `lang-${lang || 'generic'}`;
+  }
+
+  function timeAgo(dateStr) {
+    if (!dateStr) return '';
+    const diff = Math.floor((Date.now() - new Date(dateStr)) / 1000);
+    if (diff < 60) return `${diff}s ago`;
+    if (diff < 3600) return `${Math.floor(diff/60)}m ago`;
+    return `${Math.floor(diff/3600)}h ago`;
+  }
+
+  function duration(start, end) {
+    if (!start || !end) return '';
+    const diff = Math.floor((new Date(end) - new Date(start)) / 1000);
+    return `${diff}s`;
+  }
+
+  async function fetchJobs() {
+    try {
+      const res = await fetch(`${API}/jobs`);
+      if (!res.ok) throw new Error();
+      const jobs = await res.json();
+
+      // Update server status
+      document.getElementById('serverDot').className = 'status-dot';
+      document.getElementById('serverStatus').textContent = 'server online';
+
+      // Update stats
+      document.getElementById('statTotal').textContent = jobs.length;
+      document.getElementById('statQueued').textContent = jobs.filter(j => j.status === 'QUEUED').length;
+      document.getElementById('statRunning').textContent = jobs.filter(j => j.status === 'RUNNING').length;
+      document.getElementById('statSuccess').textContent = jobs.filter(j => j.status === 'SUCCESS').length;
+      document.getElementById('statFailed').textContent = jobs.filter(j => j.status === 'FAILED').length;
+
+      // Detect status changes for logging
+      jobs.forEach(job => {
+        const prev = prevJobs[job.id];
+        if (prev && prev !== job.status) {
+          if (job.status === 'RUNNING') log(`Job ${job.id.slice(0,8)}... → RUNNING on ${job.workerId}`, 'info');
+          if (job.status === 'SUCCESS') log(`Job ${job.id.slice(0,8)}... → SUCCESS ✓`, 'success');
+          if (job.status === 'FAILED') log(`Job ${job.id.slice(0,8)}... → FAILED ✗`, 'fail');
+        }
+        prevJobs[job.id] = job.status;
+      });
+
+      // Update worker busy state from jobs
+      workers.forEach(w => w.busy = false);
+      jobs.filter(j => j.status === 'RUNNING').forEach(j => {
+        const w = workers.find(w => w.id === j.workerId);
+        if (w) w.busy = true;
+      });
+      renderWorkers();
+
+      // Render jobs (newest first)
+      const sorted = [...jobs].reverse();
+      const list = document.getElementById('jobList');
+
+      if (sorted.length === 0) {
+        list.innerHTML = `<div class="empty-state"><div class="icon">📭</div><div>No jobs yet. Trigger one →</div></div>`;
+        return;
+      }
+
+      list.innerHTML = sorted.map(job => `
+        <div class="job-item" onclick="showJobDetail('${job.id}')">
+          <div class="job-status-icon status-${job.status}"></div>
+          <div class="job-info">
+            <div class="job-repo">${job.repo}</div>
+            <div class="job-meta">
+              <span>⎇ ${job.branch}</span>
+              ${job.workerId ? `<span>⚙ ${job.workerId}</span>` : ''}
+              ${job.finishedAt ? `<span>⏱ ${duration(job.createdAt, job.finishedAt)}</span>` : ''}
+              <span>${timeAgo(job.createdAt)}</span>
+            </div>
+          </div>
+          <span class="lang-badge ${langClass(job.language)}">${job.language}</span>
+          <span class="job-status-text text-${job.status}">${job.status}</span>
+        </div>
+      `).join('');
+
+    } catch (e) {
+      document.getElementById('serverDot').className = 'status-dot offline';
+      document.getElementById('serverStatus').textContent = 'server offline';
+    }
+  }
+
+  function renderWorkers() {
+    const langEmoji = { node: '🟨', python: '🐍', java: '☕', generic: '⚙️' };
+    document.getElementById('workersList').innerHTML = workers.map(w => `
+      <div class="worker-item ${w.busy ? 'busy' : ''}">
+        <div class="worker-left">
+          <div class="worker-dot ${w.busy ? 'busy' : ''}"></div>
+          <div>
+            <div class="worker-name">${langEmoji[w.type] || '⚙'} ${w.id.toUpperCase()}</div>
+            <div class="worker-type">${w.type}</div>
+          </div>
+        </div>
+        <span class="worker-state ${w.busy ? 'busy' : 'free'}">${w.busy ? 'busy' : 'free'}</span>
+      </div>
+    `).join('');
+  }
+
+  async function triggerJob() {
+    const repo = document.getElementById('inputRepo').value.trim();
+    const branch = document.getElementById('inputBranch').value.trim();
+    const language = document.getElementById('inputLang').value;
+
+    if (!repo) { showToast('Please enter a repo name', 'error'); return; }
+
+    const btn = document.getElementById('triggerBtn');
+    btn.disabled = true;
+    btn.textContent = '⏳ Triggering...';
+
+    try {
+      const res = await fetch(`${API}/jobs`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ repo, branch, language })
+      });
+      const job = await res.json();
+      log(`Job triggered: ${job.id.slice(0,8)}... [${language}]`, 'warn');
+      showToast(`✓ Job queued: ${job.id.slice(0,8)}...`, 'success');
+      prevJobs[job.id] = job.status;
+      fetchJobs();
+    } catch (e) {
+      showToast('Failed to trigger job', 'error');
+      log('Failed to trigger job', 'fail');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '▶ Trigger Job';
+    }
+  }
+
+  function showJobDetail(id) {
+    // simple — open the job endpoint in a new tab
+    window.open(`${API}/jobs/${id}`, '_blank');
+  }
+
+  // Init
+  renderWorkers();
+  fetchJobs();
+  log('Auto-refresh active (3s)', 'info');
+  setInterval(fetchJobs, 3000);
+</script>
+</body>
+</html>
