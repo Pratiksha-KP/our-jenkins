@@ -9,7 +9,7 @@ app.use(express.static(path.join(__dirname)));
 const jobRoutes = require("./routes/jobs");
 app.use("/jobs", jobRoutes);
 
-startScheduler();  // ← and this line
+startScheduler();  // ← start the scheduler after routes are set up
 
 app.listen(3000, () => {
   console.log("Server running on port 3000");
